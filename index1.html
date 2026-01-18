@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Counter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        #countDisplay {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        #status {
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Counter</h1>
+
+    <div id="countDisplay">Count: Loading...</div>
+    <button onclick="sendIncrement()">Start Counting</button>
+    <button onclick="sendGetCount()">Get Count</button>
+    <div id="status"></div>
+
+    <script>
+        let socket;
+        let reconnectInterval = 1000; // 初始重连间隔 (毫秒)
+        let maxReconnectInterval = 30000; // 最大重连间隔 (30秒)
+        let reconnectDecay = 1.5; // 重连间隔增长倍数
+
+        function connect() {
+            // WebSocket 服务器地址 (ws://localhost:3000)
+            socket = new WebSocket('ws://localhost:3000');
+
+            socket.onopen = function(event) {
+                console.log('Connected to WebSocket server');
+                document.getElementById('status').textContent = 'Connected';
+                reconnectInterval = 1000; // 重置重连间隔
+            };
+
+            socket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'countUpdate') {
+                        document.getElementById('countDisplay').textContent = `Count: ${data.count}`;
+                    } else if (data.type === 'error') {
+                         console.error('Received error from server:', data.message);
+                         alert('Server Error: ' + data.message);
+                    }
+                } catch (error) {
+                     console.error('Error parsing message from server:', error);
+                     alert('Error parsing server response');
+                }
+            };
+
+            socket.onclose = function(event) {
+                console.log('Disconnected from WebSocket server. Code:', event.code, 'Reason:', event.reason);
+                document.getElementById('status').textContent = 'Disconnected. Reconnecting...';
+                document.getElementById('countDisplay').textContent = 'Count: Disconnected';
+
+                // 实现指数退避重连机制
+                setTimeout(function() {
+                    connect(); // 递归调用 connect 函数进行重连
+                    reconnectInterval = Math.min(reconnectInterval * reconnectDecay, maxReconnectInterval);
+                }, reconnectInterval);
+            };
+
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                document.getElementById('status').textContent = 'Connection Error';
+            };
+        }
+
+        function sendIncrement() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: 'increment' }));
+            } else {
+                console.log('Cannot send message, connection is not open.');
+                alert('Not connected to server!');
+            }
+        }
+
+        function sendGetCount() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: 'getCount' }));
+            } else {
+                console.log('Cannot send message, connection is not open.');
+                alert('Not connected to server!');
+            }
+        }
+
+        // 初始化连接
+        connect();
+
+    </script>
+</body>
+</html>
